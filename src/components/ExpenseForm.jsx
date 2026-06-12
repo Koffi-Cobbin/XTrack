@@ -4,12 +4,13 @@ import { CATEGORIES, CURRENCIES } from '../lib/categories.js'
 import { db, getSetting, setSetting } from '../lib/db.js'
 import { guessWithCustomRules } from '../lib/autocat.js'
 import { checkBudgetAlerts } from '../lib/budgets.js'
+import ReceiptCapture from './ReceiptCapture.jsx'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, onOpenReceipt, showToast }) {
+export default function ExpenseForm({ editingId, onBack, onSaved, showToast }) {
   const existing = useExpense(editingId)
   const isEdit = !!editingId
 
@@ -19,17 +20,17 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
   const [date, setDate] = useState(today())
   const [category, setCategory] = useState('food')
   const [notes, setNotes] = useState('')
+  const [receiptImage, setReceiptImage] = useState(null)
+  const [showCapture, setShowCapture] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [recentMerchants, setRecentMerchants] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [autofilled, setAutofilled] = useState({}) // which fields were OCR-filled
   const [categoryManuallySet, setCategoryManuallySet] = useState(false)
 
   const descRef = useRef(null)
 
-  // Load existing expense for edit mode
   useEffect(() => {
     if (existing) {
       setDescription(existing.description || '')
@@ -39,21 +40,13 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
       setCategory(existing.category || 'food')
       setNotes(existing.notes || '')
       setCategoryManuallySet(true)
+      if (existing.receiptImageId) {
+        db.receiptImages.where('expenseId').equals(existing.receiptImageId).first()
+          .then(r => { if (r) setReceiptImage(r.image) })
+      }
     }
   }, [existing])
 
-  // Apply OCR prefill
-  useEffect(() => {
-    if (ocrPrefill && !isEdit) {
-      const filled = {}
-      if (ocrPrefill.description) { setDescription(ocrPrefill.description); filled.description = true }
-      if (ocrPrefill.amount) { setAmount(String(ocrPrefill.amount)); filled.amount = true }
-      if (ocrPrefill.date) { setDate(ocrPrefill.date); filled.date = true }
-      setAutofilled(filled)
-    }
-  }, [ocrPrefill, isEdit])
-
-  // Load defaults for new expense
   useEffect(() => {
     if (!isEdit) {
       getSetting('lastCurrency', 'GHS').then(setCurrency)
@@ -63,14 +56,13 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
     loadRecentMerchants()
   }, [isEdit])
 
-  // Auto-categorise when description changes
   useEffect(() => {
-    if (!isEdit && !categoryManuallySet && description.length >= 3) {
+    if (!categoryManuallySet && description.length >= 3) {
       guessWithCustomRules(db, description).then(guess => {
         if (guess) setCategory(guess)
       })
     }
-  }, [description, isEdit, categoryManuallySet])
+  }, [description, categoryManuallySet])
 
   async function loadRecentMerchants() {
     const all = await db.expenses.orderBy('createdAt').reverse().limit(50).toArray()
@@ -111,6 +103,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
     if (Object.keys(errs).length) { setErrors(errs); return }
     setLoading(true)
     try {
+      const receiptImageId = receiptImage ? `receipt_${Date.now()}` : (existing?.receiptImageId || null)
       const data = {
         description: description.trim(),
         amount: parseFloat(amount),
@@ -122,18 +115,22 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
         isRecurring: false,
         recurringPeriod: null,
         splitWith: [],
-        receiptImageId: ocrPrefill?.receiptImage ? `receipt_${Date.now()}` : null,
+        receiptImageId,
       }
       if (isEdit) {
         await updateExpense(editingId, data)
+        if (receiptImage && receiptImageId) {
+          const exists = await db.receiptImages.where('expenseId').equals(receiptImageId).first()
+          if (!exists) await db.receiptImages.add({ expenseId: receiptImageId, image: receiptImage, createdAt: new Date().toISOString() })
+          else await db.receiptImages.where('expenseId').equals(receiptImageId).modify({ image: receiptImage })
+        }
         onSaved('Expense updated')
       } else {
         await addExpense(data)
         await setSetting('lastCurrency', currency)
         await setSetting('lastCategory', category)
-        // Store receipt image if present
-        if (ocrPrefill?.receiptImage) {
-          await db.receiptImages.add({ expenseId: data.receiptImageId, image: ocrPrefill.receiptImage, createdAt: new Date().toISOString() })
+        if (receiptImage && receiptImageId) {
+          await db.receiptImages.add({ expenseId: receiptImageId, image: receiptImage, createdAt: new Date().toISOString() })
         }
         checkBudgetAlerts(showToast)
         onSaved('Expense added')
@@ -157,8 +154,6 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
     }
   }
 
-  const autofilledBorder = 'var(--accent)'
-
   return (
     <div style={{ padding: '16px 20px 40px' }}>
       {/* Header */}
@@ -167,39 +162,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
         <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>
           {isEdit ? 'Edit expense' : 'New expense'}
         </h1>
-        {!isEdit && (
-          <button
-            type="button"
-            onClick={onOpenReceipt}
-            title="Scan receipt"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: '8px 12px',
-              fontSize: 18,
-              lineHeight: 1,
-            }}
-          >
-            📷
-          </button>
-        )}
       </div>
-
-      {ocrPrefill && Object.keys(autofilled).length > 0 && (
-        <div style={{
-          background: 'var(--accent)11',
-          border: '1px solid var(--accent)44',
-          borderRadius: 10,
-          padding: '10px 14px',
-          marginBottom: 16,
-          fontSize: 12,
-          color: 'var(--accent-light)',
-          lineHeight: 1.5,
-        }}>
-          📷 Fields outlined in purple were auto-filled from your receipt. Review them before saving.
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Description */}
@@ -214,10 +177,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="e.g. Lunch at KFC"
             maxLength={120}
-            style={{
-              ...inputSt(errors.description),
-              borderColor: autofilled.description ? autofilledBorder : errors.description ? 'var(--danger)' : 'var(--border)',
-            }}
+            style={inputSt(errors.description)}
           />
           {showSuggestions && filteredSuggestions.length > 0 && (
             <div style={{
@@ -249,11 +209,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
               value={amount}
               onChange={e => { setAmount(e.target.value); setErrors(p => ({ ...p, amount: null })) }}
               placeholder="0.00"
-              style={{
-                ...inputSt(errors.amount),
-                flex: 1,
-                borderColor: autofilled.amount ? autofilledBorder : errors.amount ? 'var(--danger)' : 'var(--border)',
-              }}
+              style={{ ...inputSt(errors.amount), flex: 1 }}
             />
           </div>
           {errors.amount && <div style={errorSt}>{errors.amount}</div>}
@@ -265,11 +221,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
           <input
             type="date" value={date}
             onChange={e => { setDate(e.target.value); setErrors(p => ({ ...p, date: null })) }}
-            style={{
-              ...inputSt(errors.date),
-              colorScheme: 'dark',
-              borderColor: autofilled.date ? autofilledBorder : errors.date ? 'var(--danger)' : 'var(--border)',
-            }}
+            style={{ ...inputSt(errors.date), colorScheme: 'dark' }}
           />
           {errors.date && <div style={errorSt}>{errors.date}</div>}
         </div>
@@ -278,7 +230,7 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <label style={{ ...labelSt, marginBottom: 0 }}>Category</label>
-            {!isEdit && !categoryManuallySet && (
+            {!categoryManuallySet && (
               <span style={{ fontSize: 11, color: 'var(--accent-light)', fontWeight: 500 }}>🤖 auto</span>
             )}
           </div>
@@ -314,7 +266,66 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
           />
         </div>
 
-        {/* Actions */}
+        {/* Receipt photo */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <label style={{ ...labelSt, marginBottom: 0 }}>Receipt photo <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+          </div>
+
+          {receiptImage ? (
+            <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+              <img
+                src={receiptImage}
+                alt="Receipt"
+                style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border)', display: 'block' }}
+              />
+              <button
+                type="button"
+                onClick={() => setReceiptImage(null)}
+                style={{
+                  position: 'absolute', top: 8, right: 8,
+                  background: 'rgba(0,0,0,0.65)', color: '#fff',
+                  borderRadius: '50%', width: 28, height: 28,
+                  fontSize: 14, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                ✕
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCapture(true)}
+                style={{
+                  position: 'absolute', bottom: 8, right: 8,
+                  background: 'rgba(0,0,0,0.65)', color: '#fff',
+                  borderRadius: 8, padding: '5px 10px',
+                  fontSize: 12, fontWeight: 600,
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                Replace
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCapture(true)}
+              style={{
+                width: '100%', padding: '16px',
+                borderRadius: 12, border: '1.5px dashed var(--border)',
+                background: 'var(--bg-card)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 28 }}>📷</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Add receipt photo</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Camera or gallery</span>
+            </button>
+          )}
+        </div>
+
+        {/* Submit */}
         <button type="submit" disabled={loading} style={{
           width: '100%', padding: '14px', borderRadius: 'var(--radius-md)',
           background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
@@ -361,6 +372,13 @@ export default function ExpenseForm({ editingId, ocrPrefill, onBack, onSaved, on
           </div>
         )}
       </form>
+
+      {showCapture && (
+        <ReceiptCapture
+          onResult={img => { setReceiptImage(img); setShowCapture(false) }}
+          onCancel={() => setShowCapture(false)}
+        />
+      )}
     </div>
   )
 }

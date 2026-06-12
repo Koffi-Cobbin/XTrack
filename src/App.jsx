@@ -4,18 +4,16 @@ import ExpenseForm from './components/ExpenseForm.jsx'
 import ExpenseDetail from './components/ExpenseDetail.jsx'
 import StatsView from './components/StatsView.jsx'
 import SettingsView from './components/SettingsView.jsx'
-import ReceiptCapture from './components/ReceiptCapture.jsx'
 import Toast from './components/Toast.jsx'
 import { useOffline } from './hooks/useOffline.js'
 import { initDrive } from './lib/drive.js'
 
 export default function App() {
-  const [view, setView] = useState('list') // list | stats | settings | form | detail | receipt
+  const [view, setView] = useState('list') // list | stats | settings | form | detail
   const [activeTab, setActiveTab] = useState('list')
   const [editingId, setEditingId] = useState(null)
   const [detailId, setDetailId] = useState(null)
   const [toasts, setToasts] = useState([])
-  const [ocrPrefill, setOcrPrefill] = useState(null)
   const isOffline = useOffline()
 
   useEffect(() => {
@@ -28,15 +26,13 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
-  const openAdd = useCallback((prefill = null) => {
+  const openAdd = useCallback(() => {
     setEditingId(null)
-    setOcrPrefill(prefill)
     setView('form')
   }, [])
 
   const openEdit = useCallback((id) => {
     setEditingId(id)
-    setOcrPrefill(null)
     setView('form')
   }, [])
 
@@ -45,15 +41,10 @@ export default function App() {
     setView('detail')
   }, [])
 
-  const openReceipt = useCallback(() => {
-    setView('receipt')
-  }, [])
-
   const goBack = useCallback(() => {
     setView(activeTab)
     setEditingId(null)
     setDetailId(null)
-    setOcrPrefill(null)
   }, [activeTab])
 
   const switchTab = useCallback((tab) => {
@@ -71,12 +62,8 @@ export default function App() {
     goBack()
   }, [showToast, goBack])
 
-  const onReceiptResult = useCallback((result) => {
-    openAdd(result)
-  }, [openAdd])
-
-  const showOverlay = view === 'form' || view === 'detail' || view === 'receipt'
-  const isTabView = view === 'list' || view === 'stats' || view === 'settings'
+  const showOverlay = view === 'form' || view === 'detail'
+  const isTabView = !showOverlay
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
@@ -138,22 +125,13 @@ export default function App() {
           <SettingsView showToast={showToast} />
         )}
 
-        {/* Receipt capture overlay */}
-        {view === 'receipt' && (
-          <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-primary)', zIndex: 10, overflowY: 'auto', animation: 'slideUp 0.25s ease' }}>
-            <ReceiptCapture onResult={onReceiptResult} onCancel={goBack} />
-          </div>
-        )}
-
         {/* Form overlay */}
         {view === 'form' && (
           <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-primary)', zIndex: 10, overflowY: 'auto', animation: 'slideUp 0.25s ease' }}>
             <ExpenseForm
               editingId={editingId}
-              ocrPrefill={ocrPrefill}
               onBack={goBack}
               onSaved={onSaved}
-              onOpenReceipt={openReceipt}
               showToast={showToast}
             />
           </div>
@@ -176,7 +154,7 @@ export default function App() {
       {/* FAB */}
       {!showOverlay && (
         <button
-          onClick={() => openAdd()}
+          onClick={openAdd}
           style={{
             position: 'fixed', bottom: 28, right: 20,
             width: 56, height: 56, borderRadius: '50%',
