@@ -1,32 +1,42 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import ExpenseList from './components/ExpenseList.jsx'
 import ExpenseForm from './components/ExpenseForm.jsx'
 import ExpenseDetail from './components/ExpenseDetail.jsx'
 import StatsView from './components/StatsView.jsx'
+import SettingsView from './components/SettingsView.jsx'
+import ReceiptCapture from './components/ReceiptCapture.jsx'
 import Toast from './components/Toast.jsx'
 import { useOffline } from './hooks/useOffline.js'
+import { initDrive } from './lib/drive.js'
 
 export default function App() {
-  const [view, setView] = useState('list') // list | form | detail | stats
-  const [activeTab, setActiveTab] = useState('list') // list | stats
+  const [view, setView] = useState('list') // list | stats | settings | form | detail | receipt
+  const [activeTab, setActiveTab] = useState('list')
   const [editingId, setEditingId] = useState(null)
   const [detailId, setDetailId] = useState(null)
   const [toasts, setToasts] = useState([])
+  const [ocrPrefill, setOcrPrefill] = useState(null)
   const isOffline = useOffline()
+
+  useEffect(() => {
+    initDrive().catch(() => {})
+  }, [])
 
   const showToast = useCallback((message, type = 'success') => {
     const id = Date.now()
     setToasts(prev => [...prev, { id, message, type }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
-  const openAdd = useCallback(() => {
+  const openAdd = useCallback((prefill = null) => {
     setEditingId(null)
+    setOcrPrefill(prefill)
     setView('form')
   }, [])
 
   const openEdit = useCallback((id) => {
     setEditingId(id)
+    setOcrPrefill(null)
     setView('form')
   }, [])
 
@@ -35,10 +45,15 @@ export default function App() {
     setView('detail')
   }, [])
 
+  const openReceipt = useCallback(() => {
+    setView('receipt')
+  }, [])
+
   const goBack = useCallback(() => {
     setView(activeTab)
     setEditingId(null)
     setDetailId(null)
+    setOcrPrefill(null)
   }, [activeTab])
 
   const switchTab = useCallback((tab) => {
@@ -56,63 +71,48 @@ export default function App() {
     goBack()
   }, [showToast, goBack])
 
-  const showOverlay = view === 'form' || view === 'detail'
+  const onReceiptResult = useCallback((result) => {
+    openAdd(result)
+  }, [openAdd])
+
+  const showOverlay = view === 'form' || view === 'detail' || view === 'receipt'
+  const isTabView = view === 'list' || view === 'stats' || view === 'settings'
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Header */}
-      <header style={{
-        padding: '16px 20px 0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--accent-light)' }}>
-            x<span style={{ color: 'var(--text-primary)' }}>Track</span>
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <header style={{ padding: '16px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--accent-light)' }}>
+          x<span style={{ color: 'var(--text-primary)' }}>Track</span>
+        </span>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          background: 'var(--bg-card)', borderRadius: 20, padding: '4px 10px', border: '1px solid var(--border)',
+        }}>
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            background: 'var(--bg-card)',
-            borderRadius: 20,
-            padding: '4px 10px',
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              background: isOffline ? '#fdcb6e' : '#00b894',
-              boxShadow: `0 0 6px ${isOffline ? '#fdcb6e' : '#00b894'}`,
-            }} />
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>
-              {isOffline ? 'Offline' : 'Online'}
-            </span>
-          </div>
+            width: 7, height: 7, borderRadius: '50%',
+            background: isOffline ? '#fdcb6e' : '#00b894',
+            boxShadow: `0 0 6px ${isOffline ? '#fdcb6e' : '#00b894'}`,
+          }} />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>
+            {isOffline ? 'Offline' : 'Online'}
+          </span>
         </div>
       </header>
 
       {/* Tab navigation */}
-      <nav style={{
-        padding: '12px 20px 0',
-        display: 'flex',
-        gap: 4,
-        flexShrink: 0,
-      }}>
+      <nav style={{ padding: '12px 20px 0', display: 'flex', gap: 4, flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
         {[
           { id: 'list', label: 'Expenses' },
           { id: 'stats', label: 'Stats' },
+          { id: 'settings', label: '⚙️ Settings' },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => switchTab(tab.id)}
             style={{
-              padding: '8px 20px',
+              flexShrink: 0,
+              padding: '8px 18px',
               borderRadius: 20,
               fontWeight: 600,
               fontSize: 13,
@@ -128,30 +128,32 @@ export default function App() {
 
       {/* Main content */}
       <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {activeTab === 'list' && !showOverlay && (
-          <ExpenseList
-            onOpenDetail={openDetail}
-            onOpenAdd={openAdd}
-            showToast={showToast}
-          />
+        {activeTab === 'list' && isTabView && (
+          <ExpenseList onOpenDetail={openDetail} onOpenAdd={openAdd} showToast={showToast} />
         )}
-        {activeTab === 'stats' && !showOverlay && (
+        {activeTab === 'stats' && isTabView && (
           <StatsView showToast={showToast} />
+        )}
+        {activeTab === 'settings' && isTabView && (
+          <SettingsView showToast={showToast} />
+        )}
+
+        {/* Receipt capture overlay */}
+        {view === 'receipt' && (
+          <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-primary)', zIndex: 10, overflowY: 'auto', animation: 'slideUp 0.25s ease' }}>
+            <ReceiptCapture onResult={onReceiptResult} onCancel={goBack} />
+          </div>
         )}
 
         {/* Form overlay */}
         {view === 'form' && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'var(--bg-primary)',
-            zIndex: 10,
-            overflowY: 'auto',
-            animation: 'slideUp 0.25s ease',
-          }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-primary)', zIndex: 10, overflowY: 'auto', animation: 'slideUp 0.25s ease' }}>
             <ExpenseForm
               editingId={editingId}
+              ocrPrefill={ocrPrefill}
               onBack={goBack}
               onSaved={onSaved}
+              onOpenReceipt={openReceipt}
               showToast={showToast}
             />
           </div>
@@ -159,13 +161,7 @@ export default function App() {
 
         {/* Detail overlay */}
         {view === 'detail' && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'var(--bg-primary)',
-            zIndex: 10,
-            overflowY: 'auto',
-            animation: 'slideUp 0.25s ease',
-          }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-primary)', zIndex: 10, overflowY: 'auto', animation: 'slideUp 0.25s ease' }}>
             <ExpenseDetail
               expenseId={detailId}
               onBack={goBack}
@@ -180,24 +176,15 @@ export default function App() {
       {/* FAB */}
       {!showOverlay && (
         <button
-          onClick={openAdd}
+          onClick={() => openAdd()}
           style={{
-            position: 'fixed',
-            bottom: 28,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
+            position: 'fixed', bottom: 28, right: 20,
+            width: 56, height: 56, borderRadius: '50%',
             background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
-            color: '#fff',
-            fontSize: 28,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            color: '#fff', fontSize: 28,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 4px 20px rgba(108,99,255,0.5)',
-            zIndex: 100,
-            transform: 'scale(1)',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            zIndex: 100, transition: 'transform 0.15s ease',
           }}
           onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -206,7 +193,6 @@ export default function App() {
         </button>
       )}
 
-      {/* Toasts */}
       <Toast toasts={toasts} />
     </div>
   )
