@@ -17,6 +17,14 @@ export default function ReceiptCapture({ onResult, onCancel }) {
     return () => stopCamera()
   }, [])
 
+  // Attach stream once the video element is rendered in camera mode
+  useEffect(() => {
+    if (mode === 'camera' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(() => {})
+    }
+  }, [mode])
+
   function stopCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
@@ -26,18 +34,24 @@ export default function ReceiptCapture({ onResult, onCancel }) {
 
   async function startCamera() {
     setError(null)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera not supported in this browser. Please choose a photo from your gallery instead.')
+      return
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
       })
       streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-      setMode('camera')
+      setMode('camera') // video element renders now → useEffect attaches stream
     } catch (err) {
-      setError('Camera access denied. Please allow camera access or choose a photo from your gallery.')
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Camera permission denied. Please allow camera access in your browser settings, or choose a photo from your gallery.')
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found on this device. Please choose a photo from your gallery.')
+      } else {
+        setError('Could not access camera. Try choosing a photo from your gallery instead.')
+      }
     }
   }
 
