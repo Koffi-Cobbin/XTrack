@@ -69,9 +69,7 @@ export default function App() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Header */}
       <header style={{ padding: '16px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--accent-light)' }}>
-          x<span style={{ color: 'var(--text-primary)' }}>Track</span>
-        </span>
+        <img src="/logo.png" alt="xTrack" style={{ height: 44, width: 'auto', display: 'block' }} />
         <div style={{
           display: 'flex', alignItems: 'center', gap: 5,
           background: 'var(--bg-card)', borderRadius: 20, padding: '4px 10px', border: '1px solid var(--border)',

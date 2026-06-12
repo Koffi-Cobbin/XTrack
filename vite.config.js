@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      includeAssets: ['favicon.ico', 'favicon-*.png', 'apple-touch-icon*.png', 'icons/*.png'],
       manifest: {
         name: 'xTrack - Expense Tracker',
         short_name: 'xTrack',
@@ -20,13 +20,19 @@ export default defineConfig({
         icons: [
           {
             src: 'icons/icon-192.png',
-            sizes: '192x192',
+            sizes: '256x256',
             type: 'image/png'
           },
           {
             src: 'icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       },
