@@ -131,7 +131,7 @@ export default function ReceiptCapture({ onResult, onCancel }) {
       {/* Receipt guide frame */}
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
         <div style={{
-          border: '2px solid rgba(108,99,255,0.85)',
+          border: '2px solid rgba(245,166,35,0.85)',
           borderRadius: 8,
           width: '78%',
           height: '62%',

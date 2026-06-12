@@ -18,7 +18,7 @@ export default function Toast({ toasts }) {
           key={t.id}
           style={{
             background: t.type === 'error' ? 'var(--danger)' : t.type === 'warning' ? 'var(--warning)' : 'var(--bg-elevated)',
-            color: t.type === 'warning' ? '#1a1a2e' : 'var(--text-primary)',
+            color: t.type === 'warning' ? '#111111' : 'var(--text-primary)',
             border: '1px solid var(--border-light)',
             borderLeft: `4px solid ${t.type === 'error' ? '#c0392b' : t.type === 'warning' ? '#e67e22' : 'var(--accent)'}`,
             borderRadius: 'var(--radius-md)',

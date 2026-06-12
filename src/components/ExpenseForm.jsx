@@ -330,7 +330,7 @@ export default function ExpenseForm({ editingId, onBack, onSaved, showToast }) {
           width: '100%', padding: '14px', borderRadius: 'var(--radius-md)',
           background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
           color: '#fff', fontWeight: 700, fontSize: 15,
-          boxShadow: '0 4px 16px rgba(108,99,255,0.3)',
+          boxShadow: '0 4px 16px rgba(245,166,35,0.3)',
           opacity: loading ? 0.7 : 1,
         }}>
           {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Add expense'}

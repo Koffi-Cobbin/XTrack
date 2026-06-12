@@ -56,8 +56,8 @@ export default function ExpenseList({ onOpenDetail, onOpenAdd, showToast }) {
     <div style={{ height: '100%', overflowY: 'auto', padding: '12px 20px 100px' }}>
       {/* Summary card */}
       <div style={{
-        background: 'linear-gradient(135deg, #6c63ff22, #4a44b522)',
-        border: '1px solid #6c63ff44',
+        background: 'linear-gradient(135deg, #F5A62322, #C87F0022)',
+        border: '1px solid #F5A62344',
         borderRadius: 'var(--radius-lg)',
         padding: '16px 18px',
         marginBottom: 16,

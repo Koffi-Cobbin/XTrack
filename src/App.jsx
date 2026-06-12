@@ -159,7 +159,7 @@ export default function App() {
             background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))',
             color: '#fff', fontSize: 28,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(108,99,255,0.5)',
+            boxShadow: '0 4px 20px rgba(245,166,35,0.45)',
             zIndex: 100, transition: 'transform 0.15s ease',
           }}
           onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
